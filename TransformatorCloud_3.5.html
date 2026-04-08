@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Трансформатор 3.5 — вход через Google и Email</title>
+    <title>Трансформатор 3.5 — вход по email</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -20,7 +20,6 @@
         .auth-container{max-width:400px;margin:2rem auto;background:rgba(22,32,48,0.95);border-radius:32px;padding:2rem;text-align:center}
         .auth-container input,.auth-container select{width:100%;margin:10px 0;padding:12px;border-radius:60px;border:none;background:#0F1622;color:#fff}
         .auth-container button{background:#5D9BFF;border:none;padding:12px;border-radius:60px;width:100%;margin-top:10px;cursor:pointer;font-weight:bold}
-        .auth-container .google-btn{background:#DB4437;margin-top:5px}
         .auth-container .switch{color:#5D9BFF;cursor:pointer;margin-top:15px;display:inline-block}
         .dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.2rem;margin-bottom:1.2rem}
         .card{background:rgba(22,32,48,0.85);border-radius:28px;padding:1.2rem;border:1px solid rgba(72,92,120,0.3)}
@@ -69,7 +68,6 @@
 <div id="app"></div>
 
 <script>
-    // Firebase конфиг
     const firebaseConfig = {
         apiKey: "AIzaSyDYfZrjWuDKkrx4aod7rfw--muqnq_X36g",
         authDomain: "transformatoralexey.firebaseapp.com",
@@ -110,7 +108,6 @@
         return Math.round(tdee);
     }
 
-    // Рендер авторизации
     function renderAuth(){
         document.getElementById('app').innerHTML = `
             <div class="auth-container">
@@ -118,8 +115,7 @@
                 <div id="authForm">
                     <input type="email" id="email" placeholder="Email">
                     <input type="password" id="password" placeholder="Пароль">
-                    <button id="loginBtn">Войти по email</button>
-                    <button id="googleBtn" class="google-btn"><i class="fab fa-google"></i> Войти через Google</button>
+                    <button id="loginBtn">Войти</button>
                     <div class="switch" id="toRegister">Нет аккаунта? Зарегистрироваться</div>
                 </div>
                 <div id="profileForm" style="display:none">
@@ -151,12 +147,6 @@
                 await auth.signInWithEmailAndPassword(email, password);
             } catch(e){ alert('Ошибка: '+e.message); }
         };
-        document.getElementById('googleBtn').onclick = async () => {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            try {
-                await auth.signInWithPopup(provider);
-            } catch(e){ alert('Ошибка Google: '+e.message); }
-        };
         document.getElementById('toRegister').onclick = async () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -168,7 +158,8 @@
             } catch(e){ alert('Ошибка: '+e.message); }
         };
         document.getElementById('saveProfileBtn').onclick = async () => {
-            if(!currentUser) return;
+            if(!currentUser && !auth.currentUser) return;
+            const uid = currentUser ? currentUser.uid : auth.currentUser.uid;
             const profile = {
                 weight: parseFloat(document.getElementById('weight').value),
                 height: parseFloat(document.getElementById('height').value),
@@ -179,8 +170,9 @@
             };
             if(!profile.weight || !profile.height || !profile.age){ alert('Заполните все поля'); return; }
             profile.targetCalories = calculateCalories(profile);
-            await db.collection('users').doc(currentUser.uid).set(profile);
+            await db.collection('users').doc(uid).set(profile);
             userProfile = profile;
+            currentUser = auth.currentUser;
             await loadUserData();
             renderMainApp();
         };
@@ -213,7 +205,6 @@
     async function saveWeeklyMeal(key,plan){ await db.collection('users').doc(currentUser.uid).collection('weeklyMeals').doc(key).set({plan}); weeklyMeals[key]=plan; renderCurrentWeekMenu(); }
     async function saveCustomFood(food){ const id = food.name.toLowerCase().replace(/\s/g,'_'); await db.collection('users').doc(currentUser.uid).collection('customFoods').doc(id).set(food); customFoods.push(food); }
 
-    // Основной интерфейс
     function renderMainApp(){
         document.getElementById('app').innerHTML = `
             <div class="container">
