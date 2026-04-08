@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Трансформатор 3.5 — Email/пароль + анонимно</title>
+    <title>Трансформатор 3.5 — Email/пароль + анонимно (исправлен)</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -195,7 +195,7 @@
             <div class="container">
                 <div class="header">
                     <h1><i class="fas fa-cloud-sun"></i> Трансформатор 3.5</h1>
-                    <p>${currentUser.email || currentUser.isAnonymous ? 'Анонимный пользователь' : currentUser.uid.slice(0,8)} | Норма: ${userProfile?.targetCalories || '—'} ккал/день</p>
+                    <p>${currentUser.email || (currentUser.isAnonymous ? 'Анонимный пользователь' : currentUser.uid.slice(0,8))} | Норма: ${userProfile?.targetCalories || '—'} ккал/день</p>
                     <button id="logoutBtn" style="background:#555;border:none;padding:5px 12px;border-radius:40px;margin-top:5px;"><i class="fas fa-sign-out-alt"></i> Выйти</button>
                     <button id="profileBtn" style="background:#2E3D52;border:none;padding:5px 12px;border-radius:40px;margin-top:5px;"><i class="fas fa-user"></i> Профиль</button>
                 </div>
@@ -241,7 +241,7 @@
         document.addEventListener('click', (e) => { if(!e.target.closest('.food-search-row')) document.getElementById('autocompleteList').style.display = 'none'; });
     }
 
-    // Календарь и задачи (код идентичен предыдущей работающей версии, сокращён для объёма, но полностью рабочий)
+    // Календарь и задачи
     function renderCalendar(){
         const y = currentCalendarDate.getFullYear(), m = currentCalendarDate.getMonth();
         const fd = new Date(y,m,1).getDay(), dim = new Date(y,m+1,0).getDate();
@@ -438,7 +438,7 @@
         });
     }
 
-    // Меню (сокращённо, но полный код есть в предыдущих версиях)
+    // Меню
     const breakfasts = [{name:"Овсянка с ягодами (300г)", weight:300, kcal:360},{name:"Омлет из 3 яиц (220г)", weight:220, kcal:380},{name:"Творог 2% с бананом (250г)", weight:250, kcal:280},{name:"Гречневая каша с молоком (280г)", weight:280, kcal:340},{name:"Сырники (200г)", weight:200, kcal:420},{name:"Яичница с беконом (250г)", weight:250, kcal:450},{name:"Пшенная каша с тыквой (300г)", weight:300, kcal:310},{name:"Рисовая каша кокосовая (280г)", weight:280, kcal:380},{name:"Бутерброд с авокадо (150г)", weight:150, kcal:350},{name:"Смузи шпинатный (400мл)", weight:400, kcal:320}];
     const secondBreakfasts = [{name:"Яблоко (150г)", weight:150, kcal:80},{name:"Банан (120г)", weight:120, kcal:105},{name:"Греческий йогурт (150г)", weight:150, kcal:120},{name:"Миндаль (30г)", weight:30, kcal:180},{name:"Творожный сырок (50г)", weight:50, kcal:110},{name:"Апельсин (180г)", weight:180, kcal:85},{name:"Кефир 1% (250мл)", weight:250, kcal:100},{name:"Протеиновый батончик (50г)", weight:50, kcal:200},{name:"Морковь с хумусом (150г)", weight:150, kcal:180},{name:"Огуречный салат (200г)", weight:200, kcal:50}];
     const lunches = [{name:"Куриная грудка с гречкой (400г)", weight:400, kcal:520},{name:"Рис с индейкой (400г)", weight:400, kcal:480},{name:"Суп куриный (500мл)", weight:500, kcal:400},{name:"Говядина с пюре (400г)", weight:400, kcal:600},{name:"Лосось с брокколи (350г)", weight:350, kcal:550},{name:"Салат с тунцом (350г)", weight:350, kcal:420},{name:"Запеченная курица (450г)", weight:450, kcal:580},{name:"Тыквенный суп (400мл)", weight:400, kcal:240},{name:"Паста с морепродуктами (400г)", weight:400, kcal:560},{name:"Булгур с курицей (400г)", weight:400, kcal:490}];
@@ -452,11 +452,11 @@
         let plan = [];
         let target = userProfile.targetCalories;
         for(let i=0;i<7;i++){
-            let breakfast = bf[i%bf.length];
-            let secondBreakfast = sb[i%sb.length];
-            let lunch = lu[i%lu.length];
-            let afternoonSnack = as[i%as.length];
-            let dinner = di[i%dinner.length];
+            let breakfast = bf[i % bf.length];
+            let secondBreakfast = sb[i % sb.length];
+            let lunch = lu[i % lu.length];
+            let afternoonSnack = as[i % as.length];
+            let dinner = di[i % di.length];  // исправлено: было di[i % dinner.length]
             let total = breakfast.kcal + secondBreakfast.kcal + lunch.kcal + afternoonSnack.kcal + dinner.kcal;
             if(total > target+200){
                 let factor = target/total;
@@ -560,7 +560,6 @@
     const adviceList = ["🚶‍♂️ 5000 шагов в день","💧 Пей воду за 20 минут до еды","😴 Спи 7-8 часов","🍗 Белок в каждый приём","🏋️ Лестница вместо лифта","🍎 5 приёмов пищи помогают не голодать","📏 Взвешивай порции","🔥 Дефицит 500 ккал/день = минус 0.5 кг в неделю"];
     function randomAdvice(){ document.getElementById('dailyAdvice').innerHTML = `<i class="fas fa-star-of-life"></i> ${adviceList[Math.floor(Math.random()*adviceList.length)]}`; }
 
-    // Функция входа/регистрации
     function renderAuth(){
         document.getElementById('app').innerHTML = `
             <div class="auth-container">
@@ -666,8 +665,7 @@
             if(userProfile || !user.isAnonymous){
                 renderMainApp();
             } else {
-                // Анонимный пользователь без профиля
-                renderMainApp(); // всё равно покажем, но без нормы калорий
+                renderMainApp();
             }
         } else {
             renderAuth();
