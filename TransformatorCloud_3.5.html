@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Трансформатор 3.5 — полная версия</title>
+    <title>Трансформатор 3.5 — вход и регистрация</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -21,8 +21,9 @@
         .auth-container input,.auth-container select{width:100%;margin:10px 0;padding:12px;border-radius:60px;border:none;background:#0F1622;color:#fff}
         .auth-container button{background:#5D9BFF;border:none;padding:12px;border-radius:60px;width:100%;margin-top:10px;cursor:pointer;font-weight:bold}
         .auth-container .switch{color:#5D9BFF;cursor:pointer;margin-top:15px;display:inline-block}
+        .auth-container .forgot{color:#FFB347;cursor:pointer;margin-top:10px;font-size:0.8rem;display:inline-block;margin-left:10px}
         .password-wrapper{position:relative}
-        .password-wrapper i{position:absolute;right:15px;top:50%;transform:translateY(-50%);cursor:pointer;color:#aaa}
+        .toggle-password{position:absolute;right:15px;top:50%;transform:translateY(-50%);cursor:pointer;color:#5D9BFF}
         .dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.2rem;margin-bottom:1.2rem}
         .card{background:rgba(22,32,48,0.85);border-radius:28px;padding:1.2rem;border:1px solid rgba(72,92,120,0.3)}
         .card-title{font-size:1.3rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:8px;border-left:4px solid #5D9BFF;padding-left:12px}
@@ -70,6 +71,10 @@
 <div id="app"></div>
 
 <script>
+    // Принудительная очистка старых данных
+    localStorage.clear();
+    sessionStorage.clear();
+
     const firebaseConfig = {
         apiKey: "AIzaSyDYfZrjWuDKkrx4aod7rfw--muqnq_X36g",
         authDomain: "transformatoralexey.firebaseapp.com",
@@ -115,14 +120,16 @@
             <div class="auth-container">
                 <h2><i class="fas fa-dragon"></i> Трансформатор 3.5</h2>
                 <div id="authForm">
-                    <input type="email" id="email" placeholder="Email">
+                    <input type="email" id="email" placeholder="Email" autocomplete="off">
                     <div class="password-wrapper">
-                        <input type="password" id="password" placeholder="Пароль">
-                        <i class="fas fa-eye" id="togglePassword"></i>
+                        <input type="password" id="password" placeholder="Пароль" autocomplete="off">
+                        <i class="fas fa-eye toggle-password" style="position:absolute; right:15px; top:50%; transform:translateY(-50%); cursor:pointer;"></i>
                     </div>
                     <button id="loginBtn">Войти</button>
-                    <div class="switch" id="toRegister">Нет аккаунта? Зарегистрироваться</div>
-                    <div class="switch" id="resetPasswordBtn">Забыли пароль?</div>
+                    <div>
+                        <div class="switch" id="toRegister">Нет аккаунта? Зарегистрироваться</div>
+                        <div class="forgot" id="forgotPassword">Забыли пароль?</div>
+                    </div>
                 </div>
                 <div id="profileForm" style="display:none">
                     <input type="number" id="weight" placeholder="Вес (кг)" step="0.1">
@@ -146,12 +153,12 @@
                 </div>
             </div>
         `;
-        // Показать/скрыть пароль
-        document.getElementById('togglePassword').onclick = function(){
-            const pwd = document.getElementById('password');
-            pwd.type = pwd.type === 'password' ? 'text' : 'password';
-            this.classList.toggle('fa-eye-slash');
-        };
+        // Toggle password visibility
+        document.querySelector('.toggle-password').addEventListener('click', function(){
+            let input = document.getElementById('password');
+            if(input.type === 'password'){ input.type = 'text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash'); }
+            else{ input.type = 'password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye'); }
+        });
         document.getElementById('loginBtn').onclick = async () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -166,21 +173,21 @@
             if(!email || !password){ alert('Введите email и пароль'); return; }
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
+                // после успешной регистрации покажем форму профиля
                 document.getElementById('authForm').style.display = 'none';
                 document.getElementById('profileForm').style.display = 'block';
             } catch(e){ alert('Ошибка регистрации: '+e.message); }
         };
-        document.getElementById('resetPasswordBtn').onclick = async () => {
+        document.getElementById('forgotPassword').onclick = async () => {
             const email = document.getElementById('email').value;
-            if(!email){ alert('Введите email для сброса пароля'); return; }
+            if(!email){ alert('Введите ваш email'); return; }
             try {
                 await auth.sendPasswordResetEmail(email);
                 alert('Письмо для сброса пароля отправлено на '+email);
             } catch(e){ alert('Ошибка: '+e.message); }
         };
         document.getElementById('saveProfileBtn').onclick = async () => {
-            if(!currentUser && !auth.currentUser) return;
-            const uid = currentUser ? currentUser.uid : auth.currentUser.uid;
+            if(!auth.currentUser) return;
             const profile = {
                 weight: parseFloat(document.getElementById('weight').value),
                 height: parseFloat(document.getElementById('height').value),
@@ -191,7 +198,7 @@
             };
             if(!profile.weight || !profile.height || !profile.age){ alert('Заполните все поля'); return; }
             profile.targetCalories = calculateCalories(profile);
-            await db.collection('users').doc(uid).set(profile);
+            await db.collection('users').doc(auth.currentUser.uid).set(profile);
             userProfile = profile;
             currentUser = auth.currentUser;
             await loadUserData();
@@ -277,7 +284,7 @@
         document.addEventListener('click', (e) => { if(!e.target.closest('.food-search-row')) document.getElementById('autocompleteList').style.display = 'none'; });
     }
 
-    // Календарь и задачи
+    // Календарь и задачи (сокращённо, так как они работали)
     function renderCalendar(){
         const y = currentCalendarDate.getFullYear(), m = currentCalendarDate.getMonth();
         const fd = new Date(y,m,1).getDay(), dim = new Date(y,m+1,0).getDate();
@@ -343,7 +350,7 @@
         renderCalendar();
     }
 
-    // Продукты
+    // Продукты (автокомплит)
     function showAutocomplete(query){
         const listDiv = document.getElementById('autocompleteList');
         if(!query.trim() || customFoods.length===0){ listDiv.style.display='none'; return; }
@@ -603,7 +610,7 @@
                 renderMainApp();
             } else {
                 renderAuth();
-                if(document.getElementById('email')) document.getElementById('email').value = user.email || '';
+                // не подставляем email, оставляем поля пустыми
             }
         } else {
             currentUser = null;
