@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Трансформатор 3.5 — вход и восстановление</title>
+    <title>Трансформатор 3.5 — полная версия</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -21,10 +21,8 @@
         .auth-container input,.auth-container select{width:100%;margin:10px 0;padding:12px;border-radius:60px;border:none;background:#0F1622;color:#fff}
         .auth-container button{background:#5D9BFF;border:none;padding:12px;border-radius:60px;width:100%;margin-top:10px;cursor:pointer;font-weight:bold}
         .auth-container .switch{color:#5D9BFF;cursor:pointer;margin-top:15px;display:inline-block}
-        .auth-container .forgot{color:#FFB347;cursor:pointer;margin-top:10px;display:inline-block;font-size:0.85rem}
-        .password-wrapper{position:relative;width:100%}
-        .password-wrapper input{width:100%;padding-right:40px}
-        .toggle-password{position:absolute;right:15px;top:50%;transform:translateY(-50%);cursor:pointer;color:#5D9BFF}
+        .password-wrapper{position:relative}
+        .password-wrapper i{position:absolute;right:15px;top:50%;transform:translateY(-50%);cursor:pointer;color:#aaa}
         .dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.2rem;margin-bottom:1.2rem}
         .card{background:rgba(22,32,48,0.85);border-radius:28px;padding:1.2rem;border:1px solid rgba(72,92,120,0.3)}
         .card-title{font-size:1.3rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:8px;border-left:4px solid #5D9BFF;padding-left:12px}
@@ -93,11 +91,6 @@
     let chart = null;
     let editFoodIndex = null, currentEditMeal = null;
 
-    // Очистка возможного мусора в localStorage (если был старый сеанс)
-    if(localStorage.getItem('firebase:authUser:AIzaSyDYfZrjWuDKkrx4aod7rfw--muqnq_X36g:[DEFAULT]')) {
-        // Не очищаем принудительно, но можно добавить кнопку сброса
-    }
-
     function escapeHtml(str){return str.replace(/[&<>]/g,m=>m==='&'?'&amp;':(m==='<'?'&lt;':'&gt;'))}
     function getStartOfWeek(d){const day=d.getDay(),diff=day===0?6:day-1;const nd=new Date(d);nd.setDate(nd.getDate()-diff);nd.setHours(0,0,0,0);return nd}
     function getWeekKey(d){const s=getStartOfWeek(d),y=s.getFullYear(),w=Math.ceil(((s-new Date(y,0,1))/864e5+1)/7);return`${y}-W${w}`}
@@ -122,14 +115,14 @@
             <div class="auth-container">
                 <h2><i class="fas fa-dragon"></i> Трансформатор 3.5</h2>
                 <div id="authForm">
-                    <input type="email" id="email" placeholder="Email" autocomplete="email">
+                    <input type="email" id="email" placeholder="Email">
                     <div class="password-wrapper">
-                        <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
-                        <i class="fas fa-eye toggle-password" id="togglePassword"></i>
+                        <input type="password" id="password" placeholder="Пароль">
+                        <i class="fas fa-eye" id="togglePassword"></i>
                     </div>
                     <button id="loginBtn">Войти</button>
                     <div class="switch" id="toRegister">Нет аккаунта? Зарегистрироваться</div>
-                    <div class="forgot" id="forgotPassword">Забыли пароль?</div>
+                    <div class="switch" id="resetPasswordBtn">Забыли пароль?</div>
                 </div>
                 <div id="profileForm" style="display:none">
                     <input type="number" id="weight" placeholder="Вес (кг)" step="0.1">
@@ -154,56 +147,40 @@
             </div>
         `;
         // Показать/скрыть пароль
-        const togglePwd = document.getElementById('togglePassword');
-        const pwdInput = document.getElementById('password');
-        if(togglePwd){
-            togglePwd.onclick = () => {
-                const type = pwdInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                pwdInput.setAttribute('type', type);
-                togglePwd.classList.toggle('fa-eye-slash');
-            };
-        }
+        document.getElementById('togglePassword').onclick = function(){
+            const pwd = document.getElementById('password');
+            pwd.type = pwd.type === 'password' ? 'text' : 'password';
+            this.classList.toggle('fa-eye-slash');
+        };
         document.getElementById('loginBtn').onclick = async () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             if(!email || !password){ alert('Введите email и пароль'); return; }
             try {
                 await auth.signInWithEmailAndPassword(email, password);
-            } catch(e){ 
-                let msg = e.message;
-                if(msg.includes('auth/user-not-found')) msg = 'Пользователь не найден. Зарегистрируйтесь.';
-                else if(msg.includes('auth/wrong-password')) msg = 'Неверный пароль.';
-                else if(msg.includes('auth/invalid-email')) msg = 'Неверный формат email.';
-                alert('Ошибка: '+msg);
-            }
+            } catch(e){ alert('Ошибка входа: '+e.message); }
         };
         document.getElementById('toRegister').onclick = async () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             if(!email || !password){ alert('Введите email и пароль'); return; }
-            if(password.length < 6){ alert('Пароль должен быть не менее 6 символов'); return; }
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
                 document.getElementById('authForm').style.display = 'none';
                 document.getElementById('profileForm').style.display = 'block';
-            } catch(e){ 
-                let msg = e.message;
-                if(msg.includes('auth/email-already-in-use')) msg = 'Email уже используется. Войдите.';
-                else if(msg.includes('auth/weak-password')) msg = 'Слабый пароль (минимум 6 символов).';
-                alert('Ошибка: '+msg);
-            }
+            } catch(e){ alert('Ошибка регистрации: '+e.message); }
         };
-        document.getElementById('forgotPassword').onclick = async () => {
+        document.getElementById('resetPasswordBtn').onclick = async () => {
             const email = document.getElementById('email').value;
-            if(!email){ alert('Введите ваш email'); return; }
+            if(!email){ alert('Введите email для сброса пароля'); return; }
             try {
                 await auth.sendPasswordResetEmail(email);
                 alert('Письмо для сброса пароля отправлено на '+email);
             } catch(e){ alert('Ошибка: '+e.message); }
         };
         document.getElementById('saveProfileBtn').onclick = async () => {
-            if(!auth.currentUser) return;
-            const uid = auth.currentUser.uid;
+            if(!currentUser && !auth.currentUser) return;
+            const uid = currentUser ? currentUser.uid : auth.currentUser.uid;
             const profile = {
                 weight: parseFloat(document.getElementById('weight').value),
                 height: parseFloat(document.getElementById('height').value),
@@ -300,7 +277,7 @@
         document.addEventListener('click', (e) => { if(!e.target.closest('.food-search-row')) document.getElementById('autocompleteList').style.display = 'none'; });
     }
 
-    // Календарь и задачи (код полностью, но для краткости оставлю как в предыдущих версиях, он рабочий)
+    // Календарь и задачи
     function renderCalendar(){
         const y = currentCalendarDate.getFullYear(), m = currentCalendarDate.getMonth();
         const fd = new Date(y,m,1).getDay(), dim = new Date(y,m+1,0).getDate();
@@ -366,7 +343,7 @@
         renderCalendar();
     }
 
-    // Продукты (аналогично)
+    // Продукты
     function showAutocomplete(query){
         const listDiv = document.getElementById('autocompleteList');
         if(!query.trim() || customFoods.length===0){ listDiv.style.display='none'; return; }
