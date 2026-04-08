@@ -2,8 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Трансформатор 3.5 — Email/пароль + анонимно (исправлен)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Трансформатор 3.5 — финал</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +15,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Inter',sans-serif;background:linear-gradient(145deg,#0B1120 0%,#19212E 100%);color:#E8EDF5;padding:1rem;min-height:100vh}
+        body{
+            font-family:'Inter',sans-serif;
+            background:linear-gradient(145deg,#0B1120 0%,#19212E 100%);
+            color:#E8EDF5;
+            padding:1rem;
+            min-height:100vh;
+            overscroll-behavior: none; /* отключает pull-to-refresh */
+            touch-action: pan-y pinch-zoom; /* разрешает вертикальный скролл, запрещает зуминг */
+        }
         .container{max-width:1400px;margin:0 auto}
         .header{margin-bottom:1.5rem;text-align:center}
         .header h1{font-size:1.8rem;font-weight:700;background:linear-gradient(135deg,#FFF,#A5B9FF);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -54,14 +64,16 @@
         .day-plan{background:#0F1622;border-radius:20px;padding:10px;margin-bottom:12px}
         .day-title{color:#FFB347;font-weight:700;margin-bottom:6px}
         .meal-row{display:flex;justify-content:space-between;align-items:center;margin:6px 0;background:#1E2A3A;padding:5px 10px;border-radius:40px}
-        .meal-name{flex:1;font-size:.85rem}
+        .meal-name{flex:1;font-size:.85rem;cursor:pointer;color:#A5B9FF}
+        .meal-name:hover{text-decoration:underline}
         .meal-edit{background:0 0;border:none;color:#5D9BFF;cursor:pointer;margin-left:8px}
         .generate-plan-btn{background:#5D9BFF;border:none;padding:12px;border-radius:60px;width:100%;margin-top:8px;font-weight:700;cursor:pointer}
         .sync-btn{background:#2E3D52;border:none;padding:8px;border-radius:60px;width:100%;margin-top:8px;cursor:pointer}
         .advice-box{background:#0F1622;padding:1rem;border-radius:24px;margin-top:8px}
-        .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;z-index:1000}
-        .modal-content{background:#1E2A3A;border-radius:28px;padding:1.5rem;width:90%;max-width:500px}
-        .modal-content input{width:100%;margin:8px 0;padding:8px;border-radius:40px;border:none;background:#0F1622;color:#fff}
+        .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:1000}
+        .modal-content{background:#1E2A3A;border-radius:28px;padding:1.5rem;width:90%;max-width:500px;max-height:80vh;overflow-y:auto}
+        .modal-content h3{color:#FFB347;margin-bottom:10px}
+        .modal-content p{margin:8px 0;font-size:0.9rem}
         .modal-content button{margin-top:12px;background:#5D9BFF;border:none;padding:8px;border-radius:40px;cursor:pointer}
         button{border:none;cursor:pointer}
         @media(min-width:768px){body{padding:2rem}}
@@ -92,6 +104,70 @@
     let chart = null;
     let editFoodIndex = null, currentEditMeal = null;
 
+    // Расширенные данные для рецептов
+    const breakfasts = [
+        {name:"Овсянка с ягодами", weight:300, kcal:360, ingredients:"Овсяные хлопья 50г, вода 200мл, замороженные ягоды 100г, корица", instructions:"Сварить овсянку на воде, добавить ягоды, посыпать корицей."},
+        {name:"Омлет из 3 яиц", weight:220, kcal:380, ingredients:"3 яйца, 50мл молока, соль, перец, зелень", instructions:"Взбить яйца с молоком, жарить на антипригарной сковороде без масла."},
+        {name:"Творог 2% с бананом", weight:250, kcal:280, ingredients:"Творог 200г, банан 50г, ванилин", instructions:"Смешать творог с нарезанным бананом."},
+        {name:"Гречневая каша с молоком", weight:280, kcal:340, ingredients:"Гречка 60г, молоко 200мл, сахарозаменитель", instructions:"Сварить гречку на молоке."},
+        {name:"Сырники", weight:200, kcal:420, ingredients:"Творог 200г, яйцо, мука 30г, сахарозаменитель", instructions:"Смешать, сформировать сырники, запечь в духовке."},
+        {name:"Яичница с беконом", weight:250, kcal:450, ingredients:"3 яйца, бекон 40г, помидоры", instructions:"Обжарить бекон, добавить яйца."},
+        {name:"Пшенная каша с тыквой", weight:300, kcal:310, ingredients:"Пшено 50г, тыква 100г, вода", instructions:"Сварить кашу с тыквой."},
+        {name:"Рисовая каша кокосовая", weight:280, kcal:380, ingredients:"Рис круглый 50г, кокосовое молоко 200мл", instructions:"Сварить рис на кокосовом молоке."},
+        {name:"Бутерброд с авокадо", weight:150, kcal:350, ingredients:"Хлеб цельнозерновой 40г, авокадо 80г, яйцо пашот", instructions:"Размять авокадо, выложить на хлеб, сверху яйцо."},
+        {name:"Смузи шпинатный", weight:400, kcal:320, ingredients:"Шпинат 50г, банан, вода 200мл, протеин", instructions:"Смешать в блендере."}
+    ];
+    const secondBreakfasts = [
+        {name:"Яблоко", weight:150, kcal:80, ingredients:"Яблоко 150г", instructions:"Съесть целиком или нарезать."},
+        {name:"Банан", weight:120, kcal:105, ingredients:"Банан 120г", instructions:"Очистить и съесть."},
+        {name:"Греческий йогурт", weight:150, kcal:120, ingredients:"Йогурт 150г", instructions:"Съесть."},
+        {name:"Миндаль", weight:30, kcal:180, ingredients:"Миндаль 30г", instructions:"Съесть горсть."},
+        {name:"Творожный сырок", weight:50, kcal:110, ingredients:"Сырок 50г", instructions:"Съесть."},
+        {name:"Апельсин", weight:180, kcal:85, ingredients:"Апельсин 180г", instructions:"Очистить, съесть."},
+        {name:"Кефир 1%", weight:250, kcal:100, ingredients:"Кефир 250мл", instructions:"Выпить."},
+        {name:"Протеиновый батончик", weight:50, kcal:200, ingredients:"Батончик", instructions:"Съесть."},
+        {name:"Морковь с хумусом", weight:150, kcal:180, ingredients:"Морковь 100г, хумус 50г", instructions:"Нарезать морковь, макать в хумус."},
+        {name:"Огуречный салат", weight:200, kcal:50, ingredients:"Огурцы 150г, зелень, лимонный сок", instructions:"Нарезать, заправить соком."}
+    ];
+    const lunches = [
+        {name:"Куриная грудка с гречкой", weight:400, kcal:520, ingredients:"Куриная грудка 200г, гречка 150г, соль", instructions:"Отварить грудку и гречку, подать с овощами."},
+        {name:"Рис с индейкой", weight:400, kcal:480, ingredients:"Индейка 200г, рис 150г, овощи", instructions:"Тушить индейку с овощами, отварить рис."},
+        {name:"Суп куриный", weight:500, kcal:400, ingredients:"Курица 200г, картофель 100г, морковь, лук", instructions:"Сварить бульон, добавить овощи."},
+        {name:"Говядина с пюре", weight:400, kcal:600, ingredients:"Говядина 200г, картофель 200г, молоко", instructions:"Отварить мясо, сделать пюре."},
+        {name:"Лосось с брокколи", weight:350, kcal:550, ingredients:"Лосось 200г, брокколи 150г", instructions:"Запечь рыбу и брокколи в духовке."},
+        {name:"Салат с тунцом", weight:350, kcal:420, ingredients:"Тунец 100г, листья салата, огурец, яйцо", instructions:"Нарезать, смешать."},
+        {name:"Запеченная курица", weight:450, kcal:580, ingredients:"Курица 250г, специи, овощи", instructions:"Запечь курицу с овощами."},
+        {name:"Тыквенный суп", weight:400, kcal:240, ingredients:"Тыква 300г, морковь, лук, сливки", instructions:"Сварить, взбить блендером."},
+        {name:"Паста с морепродуктами", weight:400, kcal:560, ingredients:"Паста 100г, морепродукты 200г, томатный соус", instructions:"Отварить пасту, обжарить морепродукты, смешать."},
+        {name:"Булгур с курицей", weight:400, kcal:490, ingredients:"Булгур 150г, курица 200г, перец", instructions:"Тушить курицу с перцем, отварить булгур."}
+    ];
+    const afternoonSnacks = [
+        {name:"Творог 2%", weight:150, kcal:150, ingredients:"Творог 150г", instructions:"Съесть."},
+        {name:"Кефир 1%", weight:200, kcal:80, ingredients:"Кефир 200мл", instructions:"Выпить."},
+        {name:"Грецкие орехи", weight:30, kcal:195, ingredients:"Орехи 30г", instructions:"Съесть."},
+        {name:"Яблоко", weight:150, kcal:80, ingredients:"Яблоко", instructions:"Съесть."},
+        {name:"Протеиновый коктейль", weight:300, kcal:150, ingredients:"Протеин 30г, молоко 200мл", instructions:"Смешать."},
+        {name:"Морковные палочки", weight:150, kcal:60, ingredients:"Морковь 150г", instructions:"Нарезать, съесть."},
+        {name:"Рисовые хлебцы с сыром", weight:50, kcal:140, ingredients:"Хлебцы 30г, сыр 20г", instructions:"Собрать бутерброд."},
+        {name:"Запеченное яблоко", weight:200, kcal:120, ingredients:"Яблоко, корица, мед", instructions:"Запечь в духовке 20 минут."},
+        {name:"Смузи клубничный", weight:300, kcal:160, ingredients:"Клубника 150г, йогурт 150мл", instructions:"Смешать."},
+        {name:"Ореховая смесь", weight:40, kcal:240, ingredients:"Орехи 40г", instructions:"Съесть."}
+    ];
+    const dinners = [
+        {name:"Рыба на пару с овощами", weight:350, kcal:380, ingredients:"Рыба 200г, овощи 150г", instructions:"Приготовить на пару."},
+        {name:"Запеченные овощи с курицей", weight:350, kcal:420, ingredients:"Курица 200г, овощи 150г", instructions:"Запечь в духовке."},
+        {name:"Творожная запеканка", weight:300, kcal:390, ingredients:"Творог 250г, яйцо, манка", instructions:"Смешать, запечь."},
+        {name:"Салат с креветками", weight:300, kcal:350, ingredients:"Креветки 150г, листья салата, помидоры", instructions:"Нарезать, смешать."},
+        {name:"Гречка с грибами", weight:350, kcal:320, ingredients:"Гречка 150г, грибы 150г", instructions:"Отварить гречку, обжарить грибы, смешать."},
+        {name:"Овощное рагу с тофу", weight:400, kcal:310, ingredients:"Тофу 200г, овощи 200г", instructions:"Тушить на сковороде."},
+        {name:"Куриные котлеты с пюре", weight:400, kcal:500, ingredients:"Фарш куриный 200г, картофель 200г", instructions:"Сформировать котлеты, запечь, сделать пюре."},
+        {name:"Фаршированный перец", weight:400, kcal:520, ingredients:"Перец 2 шт, фарш 200г, рис 50г", instructions:"Нафаршировать, тушить."},
+        {name:"Стейк из индейки", weight:350, kcal:450, ingredients:"Индейка 200г, специи", instructions:"Обжарить на гриле."},
+        {name:"Ленивые голубцы", weight:400, kcal:480, ingredients:"Фарш 200г, рис 50г, капуста 100г", instructions:"Смешать, тушить."}
+    ];
+
+    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
     function escapeHtml(str){return str.replace(/[&<>]/g,m=>m==='&'?'&amp;':(m==='<'?'&lt;':'&gt;'))}
     function getStartOfWeek(d){const day=d.getDay(),diff=day===0?6:day-1;const nd=new Date(d);nd.setDate(nd.getDate()-diff);nd.setHours(0,0,0,0);return nd}
     function getWeekKey(d){const s=getStartOfWeek(d),y=s.getFullYear(),w=Math.ceil(((s-new Date(y,0,1))/864e5+1)/7);return`${y}-W${w}`}
@@ -109,6 +185,25 @@
         if(profile.goal === 'lose') return Math.round(tdee - 500);
         if(profile.goal === 'gain') return Math.round(tdee + 300);
         return Math.round(tdee);
+    }
+
+    // Функция показа модалки с рецептом
+    function showRecipeModal(meal){
+        if(!meal) return;
+        const modalHtml = `
+            <div id="recipeInfoModal" class="modal" style="display:flex">
+                <div class="modal-content">
+                    <h3>${escapeHtml(meal.name)}</h3>
+                    <p><strong>⚖️ Вес порции:</strong> ${meal.weight} г</p>
+                    <p><strong>🔥 Калории:</strong> ${meal.calories} ккал</p>
+                    <p><strong>🥑 Ингредиенты:</strong><br>${escapeHtml(meal.ingredients || 'Не указаны')}</p>
+                    <p><strong>📖 Приготовление:</strong><br>${escapeHtml(meal.instructions || 'Не указано')}</p>
+                    <button id="closeRecipeModalBtn">Закрыть</button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.getElementById('closeRecipeModalBtn').onclick = () => document.getElementById('recipeInfoModal').remove();
     }
 
     async function loadUserData(uid){
@@ -307,7 +402,7 @@
         renderCalendar();
     }
 
-    // Продукты
+    // Продукты (без изменений)
     function showAutocomplete(query){
         const listDiv = document.getElementById('autocompleteList');
         if(!query.trim() || customFoods.length===0){ listDiv.style.display='none'; return; }
@@ -438,13 +533,7 @@
         });
     }
 
-    // Меню
-    const breakfasts = [{name:"Овсянка с ягодами (300г)", weight:300, kcal:360},{name:"Омлет из 3 яиц (220г)", weight:220, kcal:380},{name:"Творог 2% с бананом (250г)", weight:250, kcal:280},{name:"Гречневая каша с молоком (280г)", weight:280, kcal:340},{name:"Сырники (200г)", weight:200, kcal:420},{name:"Яичница с беконом (250г)", weight:250, kcal:450},{name:"Пшенная каша с тыквой (300г)", weight:300, kcal:310},{name:"Рисовая каша кокосовая (280г)", weight:280, kcal:380},{name:"Бутерброд с авокадо (150г)", weight:150, kcal:350},{name:"Смузи шпинатный (400мл)", weight:400, kcal:320}];
-    const secondBreakfasts = [{name:"Яблоко (150г)", weight:150, kcal:80},{name:"Банан (120г)", weight:120, kcal:105},{name:"Греческий йогурт (150г)", weight:150, kcal:120},{name:"Миндаль (30г)", weight:30, kcal:180},{name:"Творожный сырок (50г)", weight:50, kcal:110},{name:"Апельсин (180г)", weight:180, kcal:85},{name:"Кефир 1% (250мл)", weight:250, kcal:100},{name:"Протеиновый батончик (50г)", weight:50, kcal:200},{name:"Морковь с хумусом (150г)", weight:150, kcal:180},{name:"Огуречный салат (200г)", weight:200, kcal:50}];
-    const lunches = [{name:"Куриная грудка с гречкой (400г)", weight:400, kcal:520},{name:"Рис с индейкой (400г)", weight:400, kcal:480},{name:"Суп куриный (500мл)", weight:500, kcal:400},{name:"Говядина с пюре (400г)", weight:400, kcal:600},{name:"Лосось с брокколи (350г)", weight:350, kcal:550},{name:"Салат с тунцом (350г)", weight:350, kcal:420},{name:"Запеченная курица (450г)", weight:450, kcal:580},{name:"Тыквенный суп (400мл)", weight:400, kcal:240},{name:"Паста с морепродуктами (400г)", weight:400, kcal:560},{name:"Булгур с курицей (400г)", weight:400, kcal:490}];
-    const afternoonSnacks = [{name:"Творог 2% (150г)", weight:150, kcal:150},{name:"Кефир 1% (200мл)", weight:200, kcal:80},{name:"Грецкие орехи (30г)", weight:30, kcal:195},{name:"Яблоко (150г)", weight:150, kcal:80},{name:"Протеиновый коктейль (300мл)", weight:300, kcal:150},{name:"Морковные палочки (150г)", weight:150, kcal:60},{name:"Рисовые хлебцы с сыром (50г)", weight:50, kcal:140},{name:"Запеченное яблоко (200г)", weight:200, kcal:120},{name:"Смузи клубничный (300мл)", weight:300, kcal:160},{name:"Ореховая смесь (40г)", weight:40, kcal:240}];
-    const dinners = [{name:"Рыба на пару с овощами (350г)", weight:350, kcal:380},{name:"Запеченные овощи с курицей (350г)", weight:350, kcal:420},{name:"Творожная запеканка (300г)", weight:300, kcal:390},{name:"Салат с креветками (300г)", weight:300, kcal:350},{name:"Гречка с грибами (350г)", weight:350, kcal:320},{name:"Овощное рагу с тофу (400г)", weight:400, kcal:310},{name:"Куриные котлеты с пюре (400г)", weight:400, kcal:500},{name:"Фаршированный перец (400г)", weight:400, kcal:520},{name:"Стейк из индейки (350г)", weight:350, kcal:450},{name:"Ленивые голубцы (400г)", weight:400, kcal:480}];
-    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+    // Генерация плана с копированием полных данных рецептов
     async function generateWeeklyPlan(){
         if(!userProfile || !userProfile.targetCalories){ alert('Сначала заполните профиль (кнопка "Профиль")'); return; }
         const wk = getWeekKey(currentWeekStart);
@@ -456,7 +545,7 @@
             let secondBreakfast = sb[i % sb.length];
             let lunch = lu[i % lu.length];
             let afternoonSnack = as[i % as.length];
-            let dinner = di[i % di.length];  // исправлено: было di[i % dinner.length]
+            let dinner = di[i % di.length];
             let total = breakfast.kcal + secondBreakfast.kcal + lunch.kcal + afternoonSnack.kcal + dinner.kcal;
             if(total > target+200){
                 let factor = target/total;
@@ -468,15 +557,16 @@
                 lunch.kcal = Math.floor(lunch.kcal * factor);
             }
             plan.push({
-                breakfast: {name:breakfast.name, weight:breakfast.weight, calories:breakfast.kcal},
-                secondBreakfast: {name:secondBreakfast.name, weight:secondBreakfast.weight, calories:secondBreakfast.kcal},
-                lunch: {name:lunch.name, weight:lunch.weight, calories:lunch.kcal},
-                afternoonSnack: {name:afternoonSnack.name, weight:afternoonSnack.weight, calories:afternoonSnack.kcal},
-                dinner: {name:dinner.name, weight:dinner.weight, calories:dinner.kcal}
+                breakfast: {name:breakfast.name, weight:breakfast.weight, calories:breakfast.kcal, ingredients:breakfast.ingredients, instructions:breakfast.instructions},
+                secondBreakfast: {name:secondBreakfast.name, weight:secondBreakfast.weight, calories:secondBreakfast.kcal, ingredients:secondBreakfast.ingredients, instructions:secondBreakfast.instructions},
+                lunch: {name:lunch.name, weight:lunch.weight, calories:lunch.kcal, ingredients:lunch.ingredients, instructions:lunch.instructions},
+                afternoonSnack: {name:afternoonSnack.name, weight:afternoonSnack.weight, calories:afternoonSnack.kcal, ingredients:afternoonSnack.ingredients, instructions:afternoonSnack.instructions},
+                dinner: {name:dinner.name, weight:dinner.weight, calories:dinner.kcal, ingredients:dinner.ingredients, instructions:dinner.instructions}
             });
         }
         await saveWeeklyMeal(currentUser.uid, wk, plan);
     }
+
     async function renderCurrentWeekMenu(){
         const wk = getWeekKey(currentWeekStart);
         const start = getStartOfWeek(currentWeekStart);
@@ -493,13 +583,25 @@
                 html += `<div class="day-plan"><div class="day-title">📅 ${days[i]}</div>`;
                 for(let [type,label] of Object.entries(mealLabels)){
                     let meal = dp[type];
-                    html += `<div class="meal-row"><span class="meal-name">🍴 ${label}: ${escapeHtml(meal.name)} (${meal.weight} г, ${meal.calories} ккал)</span><button class="meal-edit" data-dayidx="${i}" data-meal="${type}"><i class="fas fa-pen"></i></button></div>`;
+                    html += `<div class="meal-row"><span class="meal-name" data-recipe='${JSON.stringify(meal).replace(/'/g, "&#39;")}'>🍴 ${label}: ${escapeHtml(meal.name)} (${meal.weight} г, ${meal.calories} ккал)</span><button class="meal-edit" data-dayidx="${i}" data-meal="${type}"><i class="fas fa-pen"></i></button></div>`;
                 }
                 let total = (dp.breakfast?.calories||0)+(dp.secondBreakfast?.calories||0)+(dp.lunch?.calories||0)+(dp.afternoonSnack?.calories||0)+(dp.dinner?.calories||0);
                 html += `<div style="color:#FFB347;">🔥 Итого: ${total} ккал</div></div>`;
             } else { html += `<div class="day-plan"><div class="day-title">${days[i]}</div><div>Нет плана</div></div>`; }
         }
         document.getElementById('weeklyMealPlan').innerHTML = html;
+        // Добавляем клик по названию блюда для показа рецепта
+        document.querySelectorAll('.meal-name').forEach(el => {
+            el.onclick = (e) => {
+                const recipeData = el.getAttribute('data-recipe');
+                if(recipeData){
+                    try{
+                        const meal = JSON.parse(recipeData);
+                        showRecipeModal(meal);
+                    } catch(err){ console.error(err); }
+                }
+            };
+        });
         document.querySelectorAll('.meal-edit').forEach(btn=>{
             btn.onclick = () => {
                 let dayIdx = parseInt(btn.dataset.dayidx);
@@ -508,6 +610,7 @@
             };
         });
     }
+
     function openMealEditModal(weekKey, dayIdx, mealType){
         currentEditMeal = {weekKey, dayIdx, mealType};
         let meal = weeklyMeals[weekKey][dayIdx][mealType] || {name:'', weight:200, calories:300};
@@ -524,7 +627,7 @@
         if(!name || isNaN(weight) || weight<=0 || isNaN(calories) || calories<0){ alert('Введите корректные данные'); return; }
         let plan = weeklyMeals[currentEditMeal.weekKey];
         if(plan && plan[currentEditMeal.dayIdx]){
-            plan[currentEditMeal.dayIdx][currentEditMeal.mealType] = {name, weight, calories};
+            plan[currentEditMeal.dayIdx][currentEditMeal.mealType] = {name, weight, calories, ingredients:"", instructions:""};
             await saveWeeklyMeal(currentUser.uid, currentEditMeal.weekKey, plan);
         }
         closeModal('mealEditModal');
