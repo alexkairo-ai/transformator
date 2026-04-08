@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Алексей — Трансформатор Cloud 2.0 (CORS fix)</title>
+    <title>Алексей — Трансформатор Cloud 3.0</title>
+    <!-- Отключаем запрос favicon, чтобы не было 404 -->
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -65,10 +67,6 @@
         .total-calories { font-weight: bold; background: #2E3D52; padding: 8px; border-radius: 40px; text-align: center; margin: 8px 0; }
         .suggest-recipe-btn { background: #FFB347; border: none; padding: 10px; border-radius: 40px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 8px; }
         
-        .recipes-grid { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-        .recipe-card { background: #111A26; border-radius: 20px; padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .recipe-card button { background: #2E3D52; border: none; padding: 4px 10px; border-radius: 30px; cursor: pointer; color:white; }
-        
         .tracker-input { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .tracker-input input { flex:1; background: #0F1622; border: 1px solid #2E3D52; padding: 8px; border-radius: 40px; color:white; }
         .tracker-input button { background: #5D9BFF; border: none; padding: 0 16px; border-radius: 40px; }
@@ -95,8 +93,8 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1><i class="fas fa-cloud-sun"></i> Трансформатор Cloud 2.0</h1>
-        <p>Поиск продуктов и рецептов | Редактирование меню | Синхронизация</p>
+        <h1><i class="fas fa-cloud-sun"></i> Трансформатор Cloud 3.0</h1>
+        <p>Поиск продуктов (CORS fix) | Редактирование меню | Синхронизация</p>
         <div id="authStatus" style="font-size:0.7rem; margin-top:5px;">Подключение...</div>
     </div>
 
@@ -192,9 +190,8 @@
     let weightLog = [];
     let stepsLog = [];
     let weeklyMeals = {};
-    let customFoods = []; // {name, kcalPer100g}
+    let customFoods = [];
 
-    // Вспомогательные функции
     function getStartOfWeek(date) {
         const d = new Date(date);
         const day = d.getDay();
@@ -211,7 +208,6 @@
     }
     function getTodayStr() { return new Date().toISOString().slice(0,10); }
 
-    // Загрузка данных из Firestore
     async function loadCustomFoods() {
         if(!currentUserId) return;
         const snapshot = await db.collection('users').doc(currentUserId).collection('customFoods').get();
@@ -224,23 +220,6 @@
         const id = food.name.toLowerCase().replace(/\s/g, '_');
         await db.collection('users').doc(currentUserId).collection('customFoods').doc(id).set(food);
         customFoods.push(food);
-        renderFoodList();
-    }
-    async function updateCustomFood(oldName, newName, newKcal) {
-        if(!currentUserId) return;
-        const oldId = oldName.toLowerCase().replace(/\s/g, '_');
-        await db.collection('users').doc(currentUserId).collection('customFoods').doc(oldId).delete();
-        const newFood = {name: newName, kcalPer100g: newKcal};
-        await db.collection('users').doc(currentUserId).collection('customFoods').doc(newName.toLowerCase().replace(/\s/g, '_')).set(newFood);
-        const index = customFoods.findIndex(f => f.name === oldName);
-        if(index !== -1) customFoods[index] = newFood;
-        renderFoodList();
-    }
-    async function deleteCustomFood(name) {
-        if(!currentUserId) return;
-        const id = name.toLowerCase().replace(/\s/g, '_');
-        await db.collection('users').doc(currentUserId).collection('customFoods').doc(id).delete();
-        customFoods = customFoods.filter(f => f.name !== name);
         renderFoodList();
     }
 
@@ -279,7 +258,7 @@
         renderCurrentWeekMenu();
     }
 
-    // КАЛЕНДАРЬ И ЗАДАЧИ
+    // КАЛЕНДАРЬ
     let currentCalendarDate = new Date();
     let selectedDateStr = getTodayStr();
 
@@ -372,7 +351,7 @@
     }
 
     // ПРОДУКТЫ
-    let currentFoods = []; // для калькулятора {name, grams, kcal}
+    let currentFoods = [];
     function renderFoodList() {
         const container = document.getElementById('foodList');
         if(currentFoods.length === 0) { container.innerHTML = '<div style="color:#9AA6BF;">Добавьте продукты</div>'; }
@@ -398,7 +377,7 @@
         document.getElementById('totalCalories').innerHTML = `🔥 ${Math.round(total)} ккал (всего)`;
     }
 
-    // Поиск продуктов через прокси (обход CORS)
+    // НОВЫЙ ПРОКСИ ДЛЯ ПОИСКА ПРОДУКТОВ (corsproxy.io)
     document.getElementById('searchFoodBtn').addEventListener('click', async () => {
         const query = document.getElementById('foodSearchInput').value.trim();
         if(!query) return;
@@ -406,10 +385,10 @@
         resultsDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ищем...';
         try {
             const targetUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
             const resp = await fetch(proxyUrl);
-            const data = await resp.json();
-            const content = JSON.parse(data.contents);
+            const text = await resp.text();
+            const content = JSON.parse(text);
             if(content.products && content.products.length) {
                 let html = '<strong>Найденные продукты:</strong><ul style="margin-top:5px;">';
                 for(let p of content.products) {
@@ -435,7 +414,6 @@
         document.getElementById('searchResults').innerHTML = '';
         document.getElementById('foodSearchInput').value = '';
     };
-    // Добавление своего продукта
     document.getElementById('addCustomProductBtn').addEventListener('click', () => {
         let name = prompt('Название продукта:');
         if(!name) return;
@@ -445,7 +423,7 @@
         alert('Продукт добавлен в личную базу. Теперь его можно найти через поиск.');
     });
 
-    // ТРЕКЕР ВЕСА И ШАГОВ
+    // ТРЕКЕР
     let chart;
     async function logData() {
         let weight = parseFloat(document.getElementById('weightInput').value);
@@ -489,7 +467,7 @@
         });
     }
 
-    // НЕДЕЛЬНОЕ МЕНЮ С РЕДАКТИРОВАНИЕМ
+    // НЕДЕЛЬНОЕ МЕНЮ
     async function renderCurrentWeekMenu() {
         const weekKey = getWeekKey(currentWeekStart);
         const startDate = getStartOfWeek(currentWeekStart);
@@ -548,7 +526,6 @@
         document.getElementById('recipeResultsList').innerHTML = '';
         document.getElementById('recipeSearchQuery').value = '';
     }
-    // Поиск рецептов через прокси (TheMealDB поддерживает CORS, но для надёжности тоже прокси)
     document.getElementById('searchRecipeBtn').addEventListener('click', async () => {
         const query = document.getElementById('recipeSearchQuery').value.trim();
         if(!query) return;
@@ -556,7 +533,6 @@
         resultsDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ищем...';
         try {
             const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
-            // TheMealDB поддерживает CORS, но если блокирует, используем прокси
             const resp = await fetch(url);
             const data = await resp.json();
             if(data.meals) {
@@ -575,7 +551,7 @@
         let plan = weeklyMeals[currentEditWeekKey];
         if(plan && plan[currentEditDayIdx]) {
             plan[currentEditDayIdx][currentEditMealType] = recipeName;
-            plan[currentEditDayIdx].total = 400 + 500 + 350; // примерная калорийность
+            plan[currentEditDayIdx].total = 400 + 500 + 350;
             await saveWeeklyMeal(currentEditWeekKey, plan);
             renderCurrentWeekMenu();
         }
