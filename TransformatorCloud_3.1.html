@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Алексей — Трансформатор 3.1 (стабильный поиск)</title>
+    <title>Алексей — Трансформатор 3.2 (редактирование продуктов)</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <style>/* стили такие же, как в предыдущей версии, но для краткости оставлю компактно */</style>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Inter',sans-serif;background:linear-gradient(145deg,#0B1120 0%,#19212E 100%);color:#E8EDF5;padding:1rem;min-height:100vh}
@@ -35,8 +34,9 @@
         .food-search-row input{flex:2;background:#0F1622;border:1px solid #2E3D52;padding:8px;border-radius:40px;color:#fff}
         .food-search-row button{background:#5D9BFF;border:none;padding:0 16px;border-radius:40px;cursor:pointer}
         .food-list{max-height:200px;overflow-y:auto;margin:10px 0}
-        .food-item{display:flex;justify-content:space-between;background:#1E2A3A;padding:5px 10px;border-radius:30px;margin-bottom:4px;align-items:center}
-        .food-delete-btn{background:0 0;border:none;color:#FFB347;cursor:pointer;margin-left:6px}
+        .food-item{display:flex;justify-content:space-between;align-items:center;background:#1E2A3A;padding:5px 10px;border-radius:30px;margin-bottom:4px}
+        .food-info{flex:1;font-size:.85rem}
+        .food-edit,.food-delete{background:0 0;border:none;color:#FFB347;cursor:pointer;margin-left:6px}
         .total-calories{font-weight:700;background:#2E3D52;padding:8px;border-radius:40px;text-align:center;margin:8px 0}
         .suggest-recipe-btn{background:#FFB347;border:none;padding:10px;border-radius:40px;width:100%;font-weight:700;cursor:pointer;margin-top:8px}
         .tracker-input{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
@@ -61,8 +61,8 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1><i class="fas fa-cloud-sun"></i> Трансформатор 3.1</h1>
-        <p>Поиск продуктов (3 прокси, авто-запас) | Синхронизация</p>
+        <h1><i class="fas fa-cloud-sun"></i> Трансформатор 3.2</h1>
+        <p>Редактирование веса и калорий продуктов | Синхронизация</p>
         <div id="authStatus" style="font-size:0.7rem; margin-top:5px;">Подключение...</div>
     </div>
 
@@ -80,7 +80,7 @@
         <div class="card">
             <div class="card-title"><i class="fas fa-calculator"></i> Калькулятор калорий</div>
             <div class="food-search-row">
-                <input type="text" id="foodSearchInput" placeholder="Продукт (ряженка, авокадо)">
+                <input type="text" id="foodSearchInput" placeholder="Продукт (филе грудки, ряженка)">
                 <button id="searchFoodBtn"><i class="fas fa-search"></i> Найти</button>
             </div>
             <div id="searchResults" style="font-size:0.8rem; margin-bottom:8px;"></div>
@@ -118,7 +118,18 @@
     </div>
 </div>
 
-<div id="productModal" class="modal"><div class="modal-content"><h3>Редактировать продукт</h3><input type="text" id="editProductName" placeholder="Название"><input type="number" id="editProductKcal" placeholder="ккал на 100г"><button id="saveProductBtn">Сохранить</button><button id="closeModalBtn" style="background:#555;">Отмена</button></div></div>
+<!-- Модальное окно для добавления/редактирования продукта -->
+<div id="foodEditModal" class="modal">
+    <div class="modal-content">
+        <h3 id="foodEditTitle">Добавить продукт</h3>
+        <input type="text" id="editFoodName" placeholder="Название">
+        <input type="number" id="editFoodGrams" placeholder="Вес (г)" value="100">
+        <input type="number" id="editFoodKcalPer100g" placeholder="ккал на 100 г">
+        <button id="saveFoodEditBtn">Добавить</button>
+        <button id="closeFoodModalBtn" style="background:#555;">Отмена</button>
+    </div>
+</div>
+
 <div id="recipeModal" class="modal"><div class="modal-content"><h3>Выбрать рецепт</h3><input type="text" id="recipeSearchQuery" placeholder="Поиск рецепта..."><button id="searchRecipeBtn">Искать в интернете</button><div id="recipeResultsList" style="max-height:200px; overflow-y:auto; margin-top:10px;"></div><button id="closeRecipeModalBtn" style="background:#555;">Отмена</button></div></div>
 
 <script>
@@ -135,6 +146,9 @@
     const auth = firebase.auth();
 
     let currentUserId = null, currentWeekStart = new Date(), tasks = {}, weightLog = [], stepsLog = [], weeklyMeals = {}, customFoods = [];
+    let currentFoods = []; // {name, grams, kcal}
+    let editFoodIndex = null; // для редактирования существующего
+
     function getStartOfWeek(d){const day=d.getDay(),diff=day===0?6:day-1;const nd=new Date(d);nd.setDate(nd.getDate()-diff);nd.setHours(0,0,0,0);return nd}
     function getWeekKey(d){const s=getStartOfWeek(d),y=s.getFullYear(),w=Math.ceil(((s-new Date(y,0,1))/864e5+1)/7);return`${y}-W${w}`}
     function getTodayStr(){return new Date().toISOString().slice(0,10)}
@@ -150,71 +164,154 @@
     function selectDate(ds){selectedDateStr=ds;renderCalendar();renderTasksForDate()}
     function renderTasksForDate(){const c=document.getElementById('taskList'),dt=tasks[selectedDateStr]||[];if(dt.length===0){c.innerHTML='<div style="text-align:center;">Нет задач</div>';return}let html='';dt.forEach((t,i)=>{html+=`<div class="task-item ${t.done?'completed':''}"><input type="checkbox" class="task-check" ${t.done?'checked':''} data-idx="${i}"><span class="task-text">${escapeHtml(t.text)}</span><button class="task-del" data-idx="${i}"><i class="fas fa-trash-alt"></i></button></div>`});c.innerHTML=html;document.querySelectorAll('.task-check').forEach(cb=>{cb.addEventListener('change',async(e)=>{let idx=parseInt(e.target.dataset.idx);tasks[selectedDateStr][idx].done=e.target.checked;await saveTasks();renderTasksForDate();renderCalendar()})});document.querySelectorAll('.task-del').forEach(btn=>{btn.addEventListener('click',async(e)=>{let idx=parseInt(btn.dataset.idx);tasks[selectedDateStr].splice(idx,1);if(tasks[selectedDateStr].length===0)delete tasks[selectedDateStr];await saveTasks();renderTasksForDate();renderCalendar()})})}
     async function addTask(){let t=document.getElementById('newTaskText').value.trim();if(!t)return;if(!tasks[selectedDateStr])tasks[selectedDateStr]=[];tasks[selectedDateStr].push({text:t,done:false});await saveTasks();document.getElementById('newTaskText').value='';renderTasksForDate();renderCalendar()}
-    let currentFoods=[];
-    function renderFoodList(){const c=document.getElementById('foodList');if(currentFoods.length===0){c.innerHTML='<div style="color:#9AA6BF;">Добавьте продукты</div>'}else{let html='';currentFoods.forEach((f,i)=>{html+=`<div class="food-item">${f.name} ${f.grams}г — ${Math.round(f.kcal)} ккал <button class="food-delete-btn" data-idx="${i}"><i class="fas fa-trash-alt"></i></button></div>`});c.innerHTML=html;document.querySelectorAll('.food-delete-btn').forEach(btn=>{btn.addEventListener('click',(e)=>{let idx=parseInt(btn.dataset.idx);currentFoods.splice(idx,1);renderFoodList();updateTotalCalories()})})}updateTotalCalories()}
+    
+    // РЕНДЕР СПИСКА ПРОДУКТОВ С КНОПКАМИ РЕДАКТИРОВАНИЯ
+    function renderFoodList(){
+        const container=document.getElementById('foodList');
+        if(currentFoods.length===0){container.innerHTML='<div style="color:#9AA6BF;">Добавьте продукты</div>';return}
+        let html='';
+        currentFoods.forEach((f,idx)=>{
+            html+=`<div class="food-item">
+                        <span class="food-info">${f.name} — ${f.grams}г = ${Math.round(f.kcal)} ккал</span>
+                        <div>
+                            <button class="food-edit" data-idx="${idx}"><i class="fas fa-pen"></i></button>
+                            <button class="food-delete" data-idx="${idx}"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                    </div>`;
+        });
+        container.innerHTML=html;
+        document.querySelectorAll('.food-edit').forEach(btn=>{
+            btn.addEventListener('click',(e)=>{
+                let idx=parseInt(btn.dataset.idx);
+                openFoodEditModal(idx);
+            });
+        });
+        document.querySelectorAll('.food-delete').forEach(btn=>{
+            btn.addEventListener('click',(e)=>{
+                let idx=parseInt(btn.dataset.idx);
+                currentFoods.splice(idx,1);
+                renderFoodList();
+                updateTotalCalories();
+            });
+        });
+        updateTotalCalories();
+    }
     function updateTotalCalories(){let total=currentFoods.reduce((s,f)=>s+f.kcal,0);document.getElementById('totalCalories').innerHTML=`🔥 ${Math.round(total)} ккал (всего)`}
-    // МАССИВ ПРОКСИ ДЛЯ ПОИСКА ПРОДУКТОВ
+    
+    // МОДАЛКА ДЛЯ ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ ПРОДУКТА
+    function openFoodEditModal(index=null){
+        editFoodIndex=index;
+        const modal=document.getElementById('foodEditModal');
+        const title=document.getElementById('foodEditTitle');
+        if(index!==null){
+            title.innerText='Редактировать продукт';
+            const f=currentFoods[index];
+            document.getElementById('editFoodName').value=f.name;
+            document.getElementById('editFoodGrams').value=f.grams;
+            document.getElementById('editFoodKcalPer100g').value=Math.round(f.kcal / f.grams * 100);
+        }else{
+            title.innerText='Добавить продукт';
+            document.getElementById('editFoodName').value='';
+            document.getElementById('editFoodGrams').value='100';
+            document.getElementById('editFoodKcalPer100g').value='';
+        }
+        modal.style.display='flex';
+    }
+    function saveFoodFromModal(){
+        const name=document.getElementById('editFoodName').value.trim();
+        const grams=parseFloat(document.getElementById('editFoodGrams').value);
+        const kcalPer100g=parseFloat(document.getElementById('editFoodKcalPer100g').value);
+        if(!name || isNaN(grams) || grams<=0 || isNaN(kcalPer100g) || kcalPer100g<0){
+            alert('Введите корректные данные');
+            return;
+        }
+        const kcal = (kcalPer100g * grams / 100);
+        const product={name,grams,kcal};
+        if(editFoodIndex!==null){
+            currentFoods[editFoodIndex]=product;
+        }else{
+            currentFoods.push(product);
+        }
+        renderFoodList();
+        document.getElementById('foodEditModal').style.display='none';
+        editFoodIndex=null;
+    }
+    document.getElementById('saveFoodEditBtn').addEventListener('click',saveFoodFromModal);
+    document.getElementById('closeFoodModalBtn').addEventListener('click',()=>{
+        document.getElementById('foodEditModal').style.display='none';
+        editFoodIndex=null;
+    });
+    
+    // ПОИСК ПРОДУКТОВ С ВОЗМОЖНОСТЬЮ РЕДАКТИРОВАНИЯ ПЕРЕД ДОБАВЛЕНИЕМ
     const PROXIES = [
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://cors-anywhere.herokuapp.com/${url}`
     ];
-    async function searchWithProxy(query, proxyIndex=0) {
-        if(proxyIndex >= PROXIES.length) throw new Error('All proxies failed');
-        const targetUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
-        const proxyUrl = PROXIES[proxyIndex](targetUrl);
-        const resp = await fetch(proxyUrl);
-        const text = await resp.text();
+    async function searchWithProxy(query, proxyIndex=0){
+        if(proxyIndex>=PROXIES.length) throw new Error('All proxies failed');
+        const targetUrl=`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
+        const proxyUrl=PROXIES[proxyIndex](targetUrl);
+        const resp=await fetch(proxyUrl);
+        const text=await resp.text();
         let data;
-        try { data = JSON.parse(text); }
-        catch(e) { throw new Error('Invalid JSON'); }
-        if(data && data.contents) data = JSON.parse(data.contents); // для allorigins
+        try{data=JSON.parse(text);}catch(e){throw new Error('Invalid JSON');}
+        if(data && data.contents) data=JSON.parse(data.contents);
         if(data && data.products) return data;
         else throw new Error('No products');
     }
-    document.getElementById('searchFoodBtn').addEventListener('click', async () => {
-        const query = document.getElementById('foodSearchInput').value.trim();
+    document.getElementById('searchFoodBtn').addEventListener('click',async()=>{
+        const query=document.getElementById('foodSearchInput').value.trim();
         if(!query) return;
-        const resultsDiv = document.getElementById('searchResults');
-        resultsDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ищем...';
-        for(let i=0; i<PROXIES.length; i++) {
-            try {
-                const content = await searchWithProxy(query, i);
-                if(content.products && content.products.length) {
-                    let html = '<strong>Найденные продукты:</strong><ul style="margin-top:5px;">';
-                    for(let p of content.products) {
-                        let name = p.product_name_ru || p.product_name || p.generic_name || 'Без названия';
-                        let kcal = p.nutriments?.['energy-kcal_100g'] || p.nutriments?.energy_kcal_100g || 0;
-                        if(kcal > 0 && name && name !== 'Без названия') {
-                            html += `<li style="cursor:pointer; margin-bottom:5px;" onclick="addFoundProduct('${escapeHtml(name)}', ${kcal})">${escapeHtml(name)} — ${kcal} ккал/100г</li>`;
+        const resultsDiv=document.getElementById('searchResults');
+        resultsDiv.innerHTML='<i class="fas fa-spinner fa-spin"></i> Ищем...';
+        for(let i=0;i<PROXIES.length;i++){
+            try{
+                const content=await searchWithProxy(query,i);
+                if(content.products && content.products.length){
+                    let html='<strong>Найденные продукты:</strong><ul style="margin-top:5px;">';
+                    for(let p of content.products){
+                        let name=p.product_name_ru || p.product_name || p.generic_name || 'Без названия';
+                        let kcalPer100g=p.nutriments?.['energy-kcal_100g'] || p.nutriments?.energy_kcal_100g || 0;
+                        if(kcalPer100g>0 && name && name!=='Без названия'){
+                            html+=`<li style="cursor:pointer; margin-bottom:5px;" onclick="prepareAddProduct('${escapeHtml(name)}', ${kcalPer100g})">${escapeHtml(name)} — ${kcalPer100g} ккал/100г</li>`;
                         }
                     }
-                    html += '</ul>';
-                    if(html.indexOf('cursor:pointer') === -1) html += '<li>Нет продуктов с калориями</li>';
-                    resultsDiv.innerHTML = html;
+                    html+='</ul>';
+                    if(html.indexOf('cursor:pointer')===-1) html+='<li>Нет продуктов с калориями</li>';
+                    resultsDiv.innerHTML=html;
                     return;
                 }
-            } catch(e) { console.warn(`Proxy ${i} failed`, e); continue; }
+            }catch(e){console.warn(`Proxy ${i} failed`,e);continue;}
         }
-        resultsDiv.innerHTML = 'Не удалось найти продукты. Попробуйте позже.';
+        resultsDiv.innerHTML='Не удалось найти продукты. Попробуйте позже.';
     });
-    window.addFoundProduct = function(name, kcalPer100g) {
-        currentFoods.push({name, grams:100, kcal: kcalPer100g});
-        renderFoodList();
-        document.getElementById('searchResults').innerHTML = '';
-        document.getElementById('foodSearchInput').value = '';
+    window.prepareAddProduct=function(name,kcalPer100g){
+        document.getElementById('editFoodName').value=name;
+        document.getElementById('editFoodGrams').value='100';
+        document.getElementById('editFoodKcalPer100g').value=kcalPer100g;
+        editFoodIndex=null;
+        document.getElementById('foodEditTitle').innerText='Добавить продукт';
+        document.getElementById('foodEditModal').style.display='flex';
+        document.getElementById('searchResults').innerHTML='';
+        document.getElementById('foodSearchInput').value='';
     };
-    document.getElementById('addCustomProductBtn').addEventListener('click',()=>{let n=prompt('Название продукта:');if(!n)return;let k=parseFloat(prompt('Калорий на 100г:'));if(isNaN(k))return;saveCustomFood({name:n,kcalPer100g:k});alert('Продукт добавлен в личную базу')});
+    document.getElementById('addCustomProductBtn').addEventListener('click',()=>{
+        openFoodEditModal(null);
+    });
+    
+    // ТРЕКЕР
     let chart;
     async function logData(){let w=parseFloat(document.getElementById('weightInput').value),s=parseInt(document.getElementById('stepsInput').value),t=getTodayStr();if(!isNaN(w)){weightLog=weightLog.filter(w=>w.date!==t);weightLog.push({date:t,weight:w});await saveWeightEntry(t,w)}if(!isNaN(s)){stepsLog=stepsLog.filter(s=>s.date!==t);stepsLog.push({date:t,steps:s});await saveStepsEntry(t,s)}document.getElementById('weightInput').value='';document.getElementById('stepsInput').value='';updateChart()}
     function updateChart(){const last7=[];for(let i=6;i>=0;i--){let d=new Date();d.setDate(d.getDate()-i);last7.push(d.toISOString().slice(0,10))}let wd=last7.map(ds=>{let e=weightLog.find(w=>w.date===ds);return e?e.weight:null}),sd=last7.map(ds=>{let e=stepsLog.find(s=>s.date===ds);return e?e.steps/1000:null});const ctx=document.getElementById('progressChart').getContext('2d');if(chart)chart.destroy();chart=new Chart(ctx,{type:'line',data:{labels:last7.map(d=>d.slice(5)),datasets:[{label:'Вес (кг)',data:wd,borderColor:'#FFB347',tension:0.2},{label:'Шаги (тыс.)',data:sd,borderColor:'#5D9BFF',tension:0.2}]},options:{responsive:true,maintainAspectRatio:true}})}
+    
+    // НЕДЕЛЬНОЕ МЕНЮ (без изменений)
     async function renderCurrentWeekMenu(){const wk=getWeekKey(currentWeekStart),start=getStartOfWeek(currentWeekStart),days=[];for(let i=0;i<7;i++){let d=new Date(start);d.setDate(start.getDate()+i);days.push(d.toISOString().slice(0,10))}document.getElementById('weekRange').innerText=`${days[0]} – ${days[6]}`;let plan=weeklyMeals[wk];if(!plan){document.getElementById('weeklyMealPlan').innerHTML='<div style="text-align:center;">Нет меню. Нажми "Сгенерировать"</div>';return}let html='';for(let i=0;i<days.length;i++){let dp=plan[i];if(dp){html+=`<div class="day-plan"><div class="day-title">📅 ${days[i]}</div><div class="meal-row"><span class="meal-name">🍳 Завтрак: ${escapeHtml(dp.breakfast)}</span><button class="meal-edit" data-dayidx="${i}" data-meal="breakfast"><i class="fas fa-pen"></i></button></div><div class="meal-row"><span class="meal-name">🍗 Обед: ${escapeHtml(dp.lunch)}</span><button class="meal-edit" data-dayidx="${i}" data-meal="lunch"><i class="fas fa-pen"></i></button></div><div class="meal-row"><span class="meal-name">🌙 Ужин: ${escapeHtml(dp.dinner)}</span><button class="meal-edit" data-dayidx="${i}" data-meal="dinner"><i class="fas fa-pen"></i></button></div><div style="color:#FFB347;">🔥 ${dp.total} ккал</div></div>`}else{html+=`<div class="day-plan"><div class="day-title">${days[i]}</div><div>Нет плана</div></div>`}}document.getElementById('weeklyMealPlan').innerHTML=html;document.querySelectorAll('.meal-edit').forEach(btn=>{btn.addEventListener('click',(e)=>{let di=parseInt(btn.dataset.dayidx),mt=btn.dataset.meal;openRecipeModal(wk,di,mt)})})}
     let currW,currD,currM;
     function openRecipeModal(wk,di,mt){currW=wk;currD=di;currM=mt;document.getElementById('recipeModal').style.display='flex';document.getElementById('recipeResultsList').innerHTML='';document.getElementById('recipeSearchQuery').value=''}
     document.getElementById('searchRecipeBtn').addEventListener('click',async()=>{let q=document.getElementById('recipeSearchQuery').value.trim();if(!q)return;const resDiv=document.getElementById('recipeResultsList');resDiv.innerHTML='<i class="fas fa-spinner fa-spin"></i> Ищем...';try{const url=`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`;const resp=await fetch(url);const data=await resp.json();if(data.meals){let html='<strong>Выберите рецепт:</strong><ul>';for(let meal of data.meals){html+=`<li style="margin-bottom:8px;cursor:pointer;" onclick="selectRecipe('${escapeHtml(meal.strMeal)}')">${escapeHtml(meal.strMeal)}</li>`}html+='</ul>';resDiv.innerHTML=html}else{resDiv.innerHTML='Рецептов не найдено'}}catch(e){resDiv.innerHTML='Ошибка поиска'}});
     window.selectRecipe=async function(name){let plan=weeklyMeals[currW];if(plan&&plan[currD]){plan[currD][currM]=name;plan[currD].total=400+500+350;await saveWeeklyMeal(currW,plan);renderCurrentWeekMenu()}document.getElementById('recipeModal').style.display='none'};
     document.getElementById('closeRecipeModalBtn').addEventListener('click',()=>{document.getElementById('recipeModal').style.display='none'});
-    document.getElementById('closeModalBtn').addEventListener('click',()=>{document.getElementById('productModal').style.display='none'});
     async function generateWeeklyPlan(){const wk=getWeekKey(currentWeekStart),bf=["Овсянка","Омлет","Творог с ягодами","Гречневая каша","Яичница с помидорами"],lu=["Курица с гречкой","Рис с курицей","Салат с тунцом","Индейка с овощами","Суп куриный"],di=["Рыба на пару","Творог","Овощное рагу","Запеченные овощи","Куриное филе"];let plan=[];for(let i=0;i<7;i++){let b=bf[Math.floor(Math.random()*bf.length)],l=lu[Math.floor(Math.random()*lu.length)],d=di[Math.floor(Math.random()*di.length)],total=400+500+350;plan.push({breakfast:b,lunch:l,dinner:d,total})}await saveWeeklyMeal(wk,plan)}
     const adviceList=["🚶‍♂️ 5000 шагов в день","💧 Пей воду","😴 Спи 7-8 часов","🍗 Белок в каждый приём","🏋️ Лестница вместо лифта"];
     function randomAdvice(){document.getElementById('dailyAdvice').innerHTML=`<i class="fas fa-star-of-life"></i> ${adviceList[Math.floor(Math.random()*adviceList.length)]}`}
